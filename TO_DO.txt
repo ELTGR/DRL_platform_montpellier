@@ -1,0 +1,6 @@
+FILE FOR ELIOTT : 
+
+Add Multi agent scenario
+so create a train_multi_agent_scénario (look at platform_non_opitimiser last push)
+
+read TO_DO in UUV scenario
