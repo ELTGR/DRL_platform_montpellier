@@ -1,0 +1,159 @@
+Failure # 1 (occurred at 2024-03-14_10-25-16)
+The actor died because of an error raised in its creation task, [36mray::PPO.__init__()[39m (pid=37231, ip=192.168.1.195, actor_id=c79adfb812d8dd4cadad2e1401000000, repr=PPO)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/evaluation/worker_set.py", line 227, in _setup
+    self.add_workers(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/evaluation/worker_set.py", line 593, in add_workers
+    raise result.get()
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/actor_manager.py", line 481, in __fetch_result
+    result = ray.get(r)
+ray.exceptions.RayActorError: The actor died because of an error raised in its creation task, [36mray::RolloutWorker.__init__()[39m (pid=37356, ip=192.168.1.195, actor_id=14e5bda792dac6beaf16c29e01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x7f3fd9f0bd00>)
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+
+During handling of the above exception, another exception occurred:
+
+[36mray::RolloutWorker.__init__()[39m (pid=37356, ip=192.168.1.195, actor_id=14e5bda792dac6beaf16c29e01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x7f3fd9f0bd00>)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 85, in check_env
+    check_gym_environments(env, AlgorithmConfig() if config is None else config)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 201, in check_gym_environments
+    temp_sampled_reset_obs = convert_element_to_space_type(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/spaces/space_utils.py", line 382, in convert_element_to_space_type
+    return tree.map_structure(map_, element, sampled_element, check_types=False)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 433, in map_structure
+    assert_same_structure(structures[0], other, check_types=check_types)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 288, in assert_same_structure
+    raise type(e)("%s\n"
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+Entire first structure:
+[., ., ., ., ., ., ., ., ., ., ., .]
+Entire second structure:
+.
+
+During handling of the above exception, another exception occurred:
+
+[36mray::RolloutWorker.__init__()[39m (pid=37356, ip=192.168.1.195, actor_id=14e5bda792dac6beaf16c29e01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x7f3fd9f0bd00>)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/evaluation/rollout_worker.py", line 404, in __init__
+    check_env(self.env, self.config)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 96, in check_env
+    raise ValueError(
+ValueError: Traceback (most recent call last):
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 284, in assert_same_structure
+    _tree.assert_same_structure(a, b, check_types)
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+
+During handling of the above exception, another exception occurred:
+
+[36mray::RolloutWorker.__init__()[39m (pid=37356, ip=192.168.1.195, actor_id=14e5bda792dac6beaf16c29e01000000, repr=<ray.rllib.evaluation.rollout_worker.RolloutWorker object at 0x7f3fd9f0bd00>)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 85, in check_env
+    check_gym_environments(env, AlgorithmConfig() if config is None else config)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 201, in check_gym_environments
+    temp_sampled_reset_obs = convert_element_to_space_type(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/spaces/space_utils.py", line 382, in convert_element_to_space_type
+    return tree.map_structure(map_, element, sampled_element, check_types=False)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 433, in map_structure
+    assert_same_structure(structures[0], other, check_types=check_types)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 288, in assert_same_structure
+    raise type(e)("%s\n"
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+Entire first structure:
+[., ., ., ., ., ., ., ., ., ., ., .]
+Entire second structure:
+.
+
+The above error has been found in your environment! We've added a module for checking your custom environments. It may cause your experiment to fail if your environment is not set up correctly. You can disable this behavior via calling `config.environment(disable_env_checking=True)`. You can run the environment checking module standalone by calling ray.rllib.utils.check_env([your env]).
+
+During handling of the above exception, another exception occurred:
+
+[36mray::PPO.__init__()[39m (pid=37231, ip=192.168.1.195, actor_id=c79adfb812d8dd4cadad2e1401000000, repr=PPO)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/algorithms/algorithm.py", line 517, in __init__
+    super().__init__(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/tune/trainable/trainable.py", line 161, in __init__
+    self.setup(copy.deepcopy(self.config))
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/algorithms/algorithm.py", line 639, in setup
+    self.workers = WorkerSet(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/evaluation/worker_set.py", line 179, in __init__
+    raise e.args[0].args[2]
+ValueError: Traceback (most recent call last):
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 284, in assert_same_structure
+    _tree.assert_same_structure(a, b, check_types)
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+
+During handling of the above exception, another exception occurred:
+
+[36mray::PPO.__init__()[39m (pid=37231, ip=192.168.1.195, actor_id=c79adfb812d8dd4cadad2e1401000000, repr=PPO)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 85, in check_env
+    check_gym_environments(env, AlgorithmConfig() if config is None else config)
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/pre_checks/env.py", line 201, in check_gym_environments
+    temp_sampled_reset_obs = convert_element_to_space_type(
+  File "/home/ia/.local/lib/python3.8/site-packages/ray/rllib/utils/spaces/space_utils.py", line 382, in convert_element_to_space_type
+    return tree.map_structure(map_, element, sampled_element, check_types=False)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 433, in map_structure
+    assert_same_structure(structures[0], other, check_types=check_types)
+  File "/home/ia/.local/lib/python3.8/site-packages/tree/__init__.py", line 288, in assert_same_structure
+    raise type(e)("%s\n"
+ValueError: The two structures don't have the same nested structure.
+
+First structure: type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]
+
+Second structure: type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]
+
+More specifically: Substructure "type=list str=[0, 0, 0, 1, 2, 2, 1, 2, 0, 0, 1, 0]" is a sequence, while substructure "type=ndarray str=[ 2.2551732 53.210163   7.0595107 40.62215   24.917366  68.27487
+ 59.87961   84.13311   35.190052  33.29901   85.57466   85.42077
+  2.302915 ]" is not
+Entire first structure:
+[., ., ., ., ., ., ., ., ., ., ., .]
+Entire second structure:
+.
+
+The above error has been found in your environment! We've added a module for checking your custom environments. It may cause your experiment to fail if your environment is not set up correctly. You can disable this behavior via calling `config.environment(disable_env_checking=True)`. You can run the environment checking module standalone by calling ray.rllib.utils.check_env([your env]).

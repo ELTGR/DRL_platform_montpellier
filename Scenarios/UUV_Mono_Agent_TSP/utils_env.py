@@ -91,7 +91,7 @@ class UtilsUUVMonoAgentTspEnv():
         obs.append(Env_self.starting_point[1])
         obs.append(Env_self.agent_at_starting_point)
         obs.append(Env_self.current_step)
-        obs.append(Env_self.agent.get_battery())
+        obs.append(Env_self.step_limit)
         
         return (obs)
     

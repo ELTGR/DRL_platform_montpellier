@@ -1,0 +1,3 @@
+
+Create Ymal to launch the bluerov simple
+put it in this Scénario.
