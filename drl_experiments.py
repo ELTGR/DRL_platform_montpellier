@@ -15,7 +15,9 @@ from ray.air import CheckpointConfig
 import subprocess
 import time
 
-class DrlExperiments():
+from Scenarios.Multi_Agents_Supervisor_Operators.env import MultiAgentsSupervisorOperatorsEnv 
+
+class DrlExperimentsTune():
 
     def __init__(self,env,env_config,) :
 
@@ -52,9 +54,7 @@ class DrlExperiments():
                         checkpoint_config = CheckpointConfig(checkpoint_at_end=True,checkpoint_frequency=train_config["checkpoint_freqency"] ),
                         storage_path=train_config["path"]
                         )
-                
-      
-                                                                  
+                                                                               
     def tune_train_from_checkpoint(self,train_config,path):
          
 
@@ -109,122 +109,115 @@ class DrlExperiments():
                     print("obs",agent_obs)
                     env.render()
 
-    def ppo_train(self) : 
+class DrlExperimentsPPO():
+    def __init__(self,env,env_config,) :
 
-        
+        self.env_config = env_config
+        self.env_type= env
 
-        ray.init()
+    def ppo_train(self,train_config):
+         
+           
+            ray.init()
 
-        def select_policy(algorithm, framework):
-            if algorithm == "PPO":
-                if framework == "torch":
-                    return PPOTorchPolicy
-                elif framework == "tf":
-                    return PPOTF1Policy
+            def select_policy(algorithm, framework):
+                if algorithm == "PPO":
+                    if framework == "torch":
+                        return PPOTorchPolicy
+                    elif framework == "tf":
+                        return PPOTF1Policy
+                    else:
+                        return PPOTF2Policy
                 else:
-                    return PPOTF2Policy
-            else:
-                raise ValueError("Unknown algorithm: ", algorithm)
+                    raise ValueError("Unknown algorithm: ", algorithm)
 
-        taille_map_x = 6
-        taille_map_y = 3
-        subzones_size=3
-        nbr_sup = 1
-        nbr_op = 1
-        nbr_of_subzones = taille_map_x/subzones_size + taille_map_y / subzones_size
-        ppo_config = (
-            PPOConfig()
-            # or "corridor" if registered above
-            .environment(self.env_type,
-                        env_config={
-                            
-                            "num_boxes_grid_width":taille_map_x,
-                            "num_boxes_grid_height":taille_map_y,
-                            "subzones_width":subzones_size,
-                            "num_supervisors" : nbr_sup,
-                            "num_operators" : nbr_op,
-                            "num_directions" : 4,
-                            "step_limit": 1000,
-                            "same_seed" : False
+            taille_map_x = train_config["taille_map_x"]
+            taille_map_y = train_config["taille_map_y"]
+            subzones_size = train_config["subzones_size"]
+            nbr_sup = train_config["nbr_sup"]
+            nbr_op = train_config["nbr_op"]
 
+            nbr_of_subzones = taille_map_x/subzones_size + taille_map_y / subzones_size
+            tail_obs_sup = 2 + nbr_op + nbr_op * 2
+            tail_obs_op = subzones_size * subzones_size *2 + 2 
+            print("trail_obs_sup",tail_obs_sup)
 
-                        })
-            .environment(disable_env_checking=True)
+            ppo_config = (
+                PPOConfig()
+                # or "corridor" if registered above
+                .environment(self.env_type,
+                            env_config=self.env_config
+                            )
+                .environment(disable_env_checking=True)
 
-            .framework("torch")
+                .framework("torch")
 
-            # disable filters, otherwise we would need to synchronize those
-            # as well to the DQN agent
-            .rollouts(observation_filter="MeanStdFilter")
-            .training(
-                model={"vf_share_layers": True},
-                vf_loss_coeff=0.01,
-                num_sgd_iter=6,
-                _enable_learner_api=False,
+                # disable filters, otherwise we would need to synchronize those
+                # as well to the DQN agent
+                
+                .rollouts(observation_filter="MeanStdFilter")
+                .training(
+                    model={"vf_share_layers": True},
+                    vf_loss_coeff=0.01,
+                    num_sgd_iter=6,
+                    _enable_learner_api=False)
+                
+                # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
+                .resources(num_gpus=0)
+                #.rollouts(num_rollout_workers=1)
+                .rl_module(_enable_rl_module_api=False)
+                
             )
-            # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
-            .resources(num_gpus=0)
-            #.rollouts(num_rollout_workers=1)
-            .rl_module(_enable_rl_module_api=False)
-
-        )
-        tail_obs_sup = 2 + nbr_op + nbr_op * 2
-        tail_obs_op = subzones_size * subzones_size *2 + 2 
-        print("trail_obs_sup",tail_obs_sup)
-        obs_supervisor = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_sup,))
-        obs_operator = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_op,))
-
-        action_supervisor  = spaces.MultiDiscrete([4, nbr_of_subzones-1])
-        action_operator  = spaces.Discrete(4)
-
-        policies = {
-            "supervisor_policy": (None,obs_supervisor,action_supervisor, {}),
-            "operator_policy": (None,obs_operator,action_operator, {}),
-            #"operator_1": (None,obs_operator,acti, {}),
-            #"operator_2": (None,obs_operator,acti, {}),
-        }
-
-        def policy_mapping_fn(agent_id, episode, worker, **kwargs):
-            #print("#################",agent_id,"#####################################")
-            agent_type = agent_id.split('_')[0]
-            if agent_type == "supervisor" :
-                #print(agent_id,"supervisor_policy")
-                return "supervisor_policy"
-
-            else :
-                #print(agent_id,"operator_policy")
-                return "operator_policy"
-
-        ppo_config.multi_agent(
-            policies=policies,
-            policy_mapping_fn=policy_mapping_fn,
-        )
-        ppo = ppo_config.build()
-
-        
-        
-        
-        i=0 
-        j=0
-        fin = 20
-        save_intervalle = 5
-        while i  <= fin :
-
-            i+=1
-            j+=1
-            print("== Iteration", i, "==")
-            print("-- PPO --")
             
-            result_ppo = ppo.experimental()
-            print(pretty_print(result_ppo))
-            if j == save_intervalle :
-                j=0
-                save_result = ppo.save()
-                self.last_ppo_checkpoint = path_to_checkpoint = save_result
-    
+            #Creation of observation and action space 
+            obs_supervisor = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_sup,))
+            obs_operator = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_op,))
 
-        # Let's terminate the algo for demonstration purposes.
-        ppo.stop()
+            action_supervisor  = spaces.MultiDiscrete([4, nbr_of_subzones-1])
+            action_operator  = spaces.Discrete(4)
+
+
+            policies = {
+                "supervisor_policy": (None,obs_supervisor,action_supervisor, {}),
+                "operator_policy": (None,obs_operator,action_operator, {}),
+                
+            }
+
+            def policy_mapping_fn(agent_id, episode, worker, **kwargs):
+                #print("#################",agent_id,"#####################################")
+                agent_type = agent_id.split('_')[0]
+                if agent_type == "supervisor" :
+                    #print(agent_id,"supervisor_policy")
+                    return "supervisor_policy"
+
+                else :
+                    #print(agent_id,"operator_policy")
+                    return "operator_policy"
+    
+            ppo_config.multi_agent(policies=policies,policy_mapping_fn=policy_mapping_fn, )
+            ppo = ppo_config.build()
+
+            i=0 
+            j=0
+            checkpoint_interval =  train_config["checkpoint_interval"]
+            end_interation = train_config["Iteration stop"]
+            while i <= end_interation :
+                i+=1
+                j+=1
+                result_ppo = ppo.train()
+                print("== Iteration", i, "==")
+                
+                if j == checkpoint_interval :
+                    j=0
+                    save_result = ppo.save()  
+                    print(pretty_print(result_ppo))
+                    
+                    path_to_checkpoint = save_result
+                    print(
+                        "An Algorithm checkpoint has been created inside directory: "
+                        f"'{path_to_checkpoint}'."
+                    )    
+ 
 
     def ppo_train_from_checkpoint(self):
 
@@ -257,64 +250,133 @@ class DrlExperiments():
                     
             my_new_result_ppo.stop
 
+    def test(self) :
+      
+            def inference_policy_mapping_fn(agent_id):
+                agent_type = agent_id.split('_')[0]
+                if agent_type == "supervisor" :
+
+                    return "supervisor_policy"
+
+                else :
+
+                    return "operator_policy"
+          
+
+           
+            
+            algo = Algorithm.from_checkpoint("/tmp/tmp7mm65dei")
+            env = self.env_type(env_config = self.env_config)
+            obs = env.reset()
+            print(obs)
+
+            num_episodes = 0
+            num_episodes_during_inference =100
+
+        
+            episode_reward = {}
+
+            while num_episodes < num_episodes_during_inference:
+                num_episodes +=1 
+                action = {}
+                print("next step : ",num_episodes)
+
+                
+                for agent_id, agent_obs in obs.items():
+                    
+                    policy_id = inference_policy_mapping_fn(agent_id)
+                    action[agent_id] = algo.compute_single_action(observation=agent_obs, policy_id=policy_id)
+
+                print(action)
+                obs, reward, done, info = env.step(action)
+                print("next step : ",num_episodes)
+
+                for id, thing in obs.items() :
+                    print("id",id,":",thing) 
+
+                for id, thing in reward.items() :
+                    print("id :",id,":",thing)
+        
+         
+         
+
+               
+
+                env.render()
+
 if __name__ == '__main__':
 
-
-    # from Scenarios.Multi_Agents_Supervisor_Operators.env import MultiAgentEnv
-
-    # taille_map_x = 3
-    # taille_map_y = 3
-    # n_orders = 3
-    # step_limit = 100
-    # env_config={
-    #             "implementation":"simple",
-                
-    #             "num_boxes_grid_width":taille_map_x,
-    #             "num_boxes_grid_height":taille_map_y,
-    #             "n_orders" : n_orders,
-    #             "step_limit": step_limit,
-    #             "same_seed" : False
-    #             }
-    # my_platform = DrlExperiments(env = MultiAgentEnv, env_config=env_config )
-    # my_platform.ppo_train() 
-
-#Train mono agent 
-    from Scenarios.UUV_Mono_Agent_TSP.env import UUVMonoAgentTSPEnv
-
-
-    taille_map_x = 3
+#FOR MULTI AGENT CHECKPOINT ARE SAVE IN /tmp/tmpxxxxxxxx I work to solve this problem
+     
+#Train Multi agent    
+    taille_map_x = 6
     taille_map_y = 3
-    n_orders = 3
-    step_limit = 100000
-
-
-    env_config={
-                "implementation":"simple",
-                
+    subzones_size = 3
+    nbr_sup = 1
+    nbr_op= 1 
+    nbr_goals = 3 
+    env_config={ 
+                "implementation" : "simple",
                 "num_boxes_grid_width":taille_map_x,
                 "num_boxes_grid_height":taille_map_y,
-                "n_orders" : n_orders,
-                "step_limit": step_limit,
+                "subzones_width":subzones_size,
+                "num_supervisors" : nbr_sup,
+                "num_operators" : nbr_op,
+                "n_goals": nbr_goals,
+                "num_directions" : 4,
+                "step_limit": 100,
                 "same_seed" : False
                 }
-
+    
     train_config = {
-                    "name" : str(taille_map_x)+"x"+str(taille_map_y)+"_"+str(n_orders)+"_"+str(step_limit),
-                    "path" : "/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models",
-                    "checkpoint_freqency" : 5,
-                    "stop_step" : step_limit,
-                    "num_workers": 1,
-                    "num_learner_workers" : 0,
-                    "num_gpus": 0,
-                    "num_gpus_per_worker": 0,#
-                    "num_cpus_per_worker": 5,
-                    "model":{"fcnet_hiddens": [64, 64],},  # Architecture du réseau de neurones (couches cachées) 
-                    "optimizer": {"learning_rate": 0.001,} # Taux d'apprentissage
-    }
+                "checkpoint_interval" : 2,
+                "Iteration stop": 3,
+                "taille_map_x" : 6,
+                "taille_map_y" : 3,
+                "subzones_size" : 3,
+                "nbr_sup" : 1,
+                "nbr_op" : 1
+                }
+    my_train = DrlExperimentsPPO(env=MultiAgentsSupervisorOperatorsEnv,env_config=env_config).ppo_train(train_config= train_config)
 
-    my_platform = DrlExperiments(env_config=env_config,env = UUVMonoAgentTSPEnv)
-    my_platform.tune_train(train_config=train_config) 
+##-----------------------------------------------------------------------------------------------------
+##Train mono agent 
+#     from Scenarios.UUV_Mono_Agent_TSP.env import UUVMonoAgentTSPEnv
 
-    #my_platform.test(implementation="simple",path="/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_8751c_00000_0_2024-03-07_11-07-39/checkpoint_000000")
-    #my_platform.train_from_checkpoint(train_config=train_config,path="/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_8751c_00000_0_2024-03-07_11-07-39/checkpoint_000000")
+
+#     taille_map_x = 3
+#     taille_map_y = 3
+#     n_orders = 3
+#     step_limit = 100000
+
+
+#     env_config={
+#                 "implementation":"simple",
+                
+#                 "num_boxes_grid_width":taille_map_x,
+#                 "num_boxes_grid_height":taille_map_y,
+#                 "n_orders" : n_orders,
+#                 "step_limit": step_limit,
+#                 "same_seed" : False
+#                 }
+
+#     train_config = {
+#                     "name" : str(taille_map_x)+"x"+str(taille_map_y)+"_"+str(n_orders)+"_"+str(step_limit),
+#                     "path" : "/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models",
+#                     "checkpoint_freqency" : 5,
+#                     "stop_step" : step_limit,
+#                     "num_workers": 1,
+#                     "num_learner_workers" : 0,
+#                     "num_gpus": 0,
+#                     "num_gpus_per_worker": 0,#
+#                     "num_cpus_per_worker": 5,
+#                     "model":{"fcnet_hiddens": [64, 64],},  # Architecture du réseau de neurones (couches cachées) 
+#                     "optimizer": {"learning_rate": 0.001,} # Taux d'apprentissage
+#     }
+
+#     my_platform = DrlExperimentsTune(env_config=env_config,env = UUVMonoAgentTSPEnv)
+#     my_platform.tune_train(train_config=train_config) 
+
+#     #my_platform.test(implementation="simple",path="/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_8751c_00000_0_2024-03-07_11-07-39/checkpoint_000000")
+#     #my_platform.train_from_checkpoint(train_config=train_config,path="/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_8751c_00000_0_2024-03-07_11-07-39/checkpoint_000000")
     
