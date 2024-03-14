@@ -1,3 +1,13 @@
+# Requirement : 
+
+  Ray : 2.8.1
+  python : 3.8.10
+  Gymnasium : 0.28.1
+# Install 
+
+  pip install "ray[rllib]" tensorflow torch
+  pip install ray == 2.8.1
+
 # Generic Platform
 - The goal is to create a generic platform to train plenty IAs on environments.
 
