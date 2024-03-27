@@ -14,17 +14,19 @@ from ray import tune
 from ray.air import CheckpointConfig
 import subprocess
 import time
+import onnxruntime
+import numpy as np
 
 from Scenarios.Multi_Agents_Supervisor_Operators.env import MultiAgentsSupervisorOperatorsEnv 
 
 class DrlExperimentsTune():
 
-    def __init__(self,env,env_config,) :
+    def __init__(self, env, env_config) :
 
         self.env_config = env_config
         self.env_type= env
         
-    def tune_train(self,train_config) : 
+    def tune_train(self, train_config) : 
 
 
 
@@ -55,7 +57,7 @@ class DrlExperimentsTune():
                         storage_path=train_config["path"]
                         )
                                                                                
-    def tune_train_from_checkpoint(self,train_config,path):
+    def tune_train_from_checkpoint(self, train_config, path):
          
 
 
@@ -81,14 +83,16 @@ class DrlExperimentsTune():
                         checkpoint_config = CheckpointConfig(checkpoint_at_end=True,checkpoint_frequency=train_config["checkpoint_freqency"] ),
                         storage_path=train_config["path"],restore=path
                         )
-        
-    
-    def test(self,implementation, path) :
+           
+    def test(self, implementation, path) :
              # Lancez TensorBoard en utilisant un nouveau terminal (Linux/Mac)
-            ros_tcp_endpoint = f"x-terminal-emulator -e roslaunch ros_tcp_endpoint endpoint.launch"
-        
-            process_terminal_1 = subprocess.Popen(ros_tcp_endpoint, shell=True)
+            
             self.env_config['implementation'] = implementation 
+            
+            if self.env_config['implementation'] == "real": 
+                ros_tcp_endpoint = f"x-terminal-emulator -e roslaunch ros_tcp_endpoint endpoint.launch"
+                process_terminal_1 = subprocess.Popen(ros_tcp_endpoint, shell=True)
+
             print("config : ",self.env_config)
 
             env = self.env_type(env_config = self.env_config)
@@ -99,19 +103,73 @@ class DrlExperimentsTune():
 
             while True : 
 
-                action =  action = loaded_model.compute_single_action(agent_obs)
+                action =  loaded_model.compute_single_action(agent_obs)
                 print(action)
                 agent_obs, reward, done, info = env.step(action)
                 print("obs",agent_obs)
                 print("obs",reward)
             
                 env.render()
+
                 if done :
                     env = self.env_type(env_config=self.env_config)
                     agent_obs = env.reset()
                     print("obs",agent_obs)
                     env.render()
+ 
+    def export(self,checkpointpath, export_dir) : 
 
+        loaded_algo = Algorithm.from_checkpoint(checkpointpath)
+        loaded_algo.export_policy_model(export_dir=export_dir,onnx=13)
+   
+    def import_and_test_onnx_model(self, model_path = None ):
+        
+        #import onnxruntim   onnx_model_path = "chemin_vers_le_modele.onnx"
+        session = onnxruntime.InferenceSession(model_path)
+        
+        # Récupérer les noms d'entrée et de sortie
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
+        print(input_name)
+        print(output_name)   
+        
+        env = self.env_type(env_config = self.env_config)
+        # Initialiser l'environnement       
+        observation = env.reset()
+        print("agent_obs : ", observation)
+        
+        # Boucle pour tester les actions de l'agent
+        done = False
+        observation = env.reset()
+        env.render()
+        while True :
+	
+            # Préparer les données d'entrée
+            input_data = np.array(observation, dtype=np.float32)
+            input_data = np.expand_dims(input_data, axis=0) # Ajouter une dimension batch
+            
+            # Effectuer l'inférence du modèle
+            output = session.run([output_name],{input_name: input_data,'state_ins' : [] })
+            # Déduire l'action à partir de la sortie du modèle
+
+            action = np.argmax(output)
+            print(action)
+
+            # Exécuter l'action dans l'environnement
+
+            observation, reward, done, info = env.step(action)
+
+            # Afficher ou enregistrer les résultats, si nécessaire
+            print("agent_obs : ",observation)
+            print("agent_reward : ",reward)
+            env.render()
+            if done :
+                env = self.env_type(env_config=self.env_config)
+                agent_obs = env.reset()
+                print("agent_obs : ",agent_obs)
+                env.render()
+    
+  
 class DrlExperimentsPPO():
     def __init__(self,env,env_config,) :
 
@@ -371,15 +429,20 @@ if __name__ == '__main__':
                     "num_workers": 1,
                     "num_learner_workers" : 0,
                     "num_gpus": 0,
-                    "num_gpus_per_worker": 0,#
+                    "num_gpus_per_worker": 0,
                     "num_cpus_per_worker": 5,
-                    "model":{"fcnet_hiddens": [64, 64],},  # Architecture du réseau de neurones (couches cachées) 
+                    "model": {"fcnet_hiddens": [128, 128, 128]},  # Architecture du réseau de neurones (couches cachées) 
                     "optimizer": {"learning_rate": 0.001,} # Taux d'apprentissage
     }
 
     my_platform = DrlExperimentsTune(env_config=env_config,env = UUVMonoAgentTSPEnv)
     #my_platform.tune_train(train_config=train_config) 
+    my_platform.export(checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_ad9f3_00000_0_2024-03-26_10-10-23/checkpoint_000010",  export_dir="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/")
+    #my_platform.tune_train_from_checkpoint(train_config=train_config,path="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_4d474_00000_0_2024-03-26_13-42-27/checkpoint_000000")
 
-    my_platform.test(implementation="real",path="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_a88ad_00000_0_2024-03-14_10-31-38/checkpoint_000002")
-    #my_platform.train_from_checkpoint(train_config=train_config,path="/home/ia/Desktop/generic_platform/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_8751c_00000_0_2024-03-07_11-07-39/checkpoint_000000")
-    
+    #my_platform.import_and_test_onnx_model(model_path ="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/model.onnx")
+    #my_platform.export_checkpoint(checkpoint_path = "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002", export_dir = "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/")
+    #my_platform.test(implementation="simple",path="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002")
+
+    #loaded_algo = Algorithm.from_checkpoint("/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002")
+    #loaded_algo.export_policy_model(export_dir="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/",onnx=13)

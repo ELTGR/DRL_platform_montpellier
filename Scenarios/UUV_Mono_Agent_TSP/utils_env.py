@@ -64,11 +64,15 @@ class UtilsUUVMonoAgentTspEnv():
         else:
             raise Exception("action: {action} is invalid")
         #print("starting_point :", [new_x,new_y],"=",self.starting_point)
+        
+        
         if [new_x,new_y] == Env_self.starting_point :
             #print("in")
             Env_self.agent_at_starting_point = 1 
         else :
             Env_self.agent_at_starting_point = 0
+
+            
         Env_self.agent.set_pos( [new_x,new_y])
 
     def _get_observation(self,Env_self):
