@@ -18,7 +18,7 @@ import onnxruntime
 import numpy as np
 import os, sys 
 from Scenarios.Multi_Agents_Supervisor_Operators.env import MultiAgentsSupervisorOperatorsEnv 
-
+from ray.rllib.policy.sample_batch import DEFAULT_POLICY_ID
 class DrlExperimentsTune():
 
     def __init__(self, env, env_config) :
@@ -147,7 +147,9 @@ class DrlExperimentsTune():
                         storage_path=train_config["storage_path"],restore=checkpointpath
                         )
            
-    def test(self, implementation, path) :
+    def test(self, implementation, multi_agent = False, checkpointpath = None) :
+            
+        if multi_agent == False :
              # Lancez TensorBoard en utilisant un nouveau terminal (Linux/Mac)
             
             self.env_config['implementation'] = implementation 
@@ -159,7 +161,7 @@ class DrlExperimentsTune():
             print("config : ",self.env_config)
 
             env = self.env_type(env_config = self.env_config)
-            loaded_model = Algorithm.from_checkpoint(path)
+            loaded_model = Algorithm.from_checkpoint(checkpointpath)
             agent_obs = env.reset()
             print("obs",agent_obs)
             env.render()
@@ -179,11 +181,60 @@ class DrlExperimentsTune():
                     agent_obs = env.reset()
                     print("obs",agent_obs)
                     env.render()
- 
-    def export_to_onnx(self,checkpointpath, export_dir) : 
+        elif multi_agent == True : 
 
-        loaded_algo = Algorithm.from_checkpoint(checkpointpath)
-        loaded_algo.export_policy_model(export_dir=export_dir,onnx=13)
+            def inference_policy_mapping_fn(agent_id):
+                agent_type = agent_id.split('_')[0]
+                if agent_type == "supervisor" :
+
+                    return "supervisor_policy"
+
+                else :
+
+                    return "operator_policy"
+          
+
+           
+            
+            algo = Algorithm.from_checkpoint(checkpointpath)
+            env = self.env_type(env_config = self.env_config)
+            obs = env.reset()
+            print(obs)
+
+            num_episodes = 0
+            num_episodes_during_inference =100
+
+        
+            episode_reward = {}
+
+            while num_episodes < num_episodes_during_inference:
+                num_episodes +=1 
+                action = {}
+                print("next step : ",num_episodes)
+
+                
+                for agent_id, agent_obs in obs.items():
+                    
+                    policy_id = inference_policy_mapping_fn(agent_id)
+                    action[agent_id] = algo.compute_single_action(observation=agent_obs, policy_id=policy_id)
+
+                print(action)
+                obs, reward, done, info = env.step(action)
+                print("next step : ",num_episodes)
+
+                for id, thing in obs.items() :
+                    print("id",id,":",thing) 
+
+                for id, thing in reward.items() :
+                    print("id :",id,":",thing)
+        
+                env.render() 
+
+    def export_to_onnx(self, policies = DEFAULT_POLICY_ID , checkpointpath = None, export_dir = None) : 
+        for i in range(len(policies)) : 
+
+            loaded_algo = Algorithm.from_checkpoint(checkpointpath)
+            loaded_algo.export_policy_model(policy_id=policies[i], export_dir=export_dir,onnx=13)
    
     def import_and_test_onnx_model(self, model_path = None ):
         
@@ -231,203 +282,7 @@ class DrlExperimentsTune():
                 agent_obs = env.reset()
                 print("agent_obs : ",agent_obs)
                 env.render()
-    
-  
-class DrlExperimentsPPO():
-    def __init__(self,env,env_config,) :
-
-        self.env_config = env_config
-        self.env_type= env
-
-    def ppo_train(self,train_config):
-         
-           
-            ray.init()
-
-            def select_policy(algorithm, framework):
-                if algorithm == "PPO":
-                    if framework == "torch":
-                        return PPOTorchPolicy
-                    elif framework == "tf":
-                        return PPOTF1Policy
-                    else:
-                        return PPOTF2Policy
-                else:
-                    raise ValueError("Unknown algorithm: ", algorithm)
-
-            taille_map_x = train_config["taille_map_x"]
-            taille_map_y = train_config["taille_map_y"]
-            subzones_size = train_config["subzones_size"]
-            nbr_sup = train_config["nbr_sup"]
-            nbr_op = train_config["nbr_op"]
-
-            nbr_of_subzones = taille_map_x/subzones_size + taille_map_y / subzones_size
-            tail_obs_sup = 2 + nbr_op + nbr_op * 2
-            tail_obs_op = subzones_size * subzones_size *2 + 2 
-            print("trail_obs_sup",tail_obs_sup)
-
-            ppo_config = (
-                PPOConfig()
-                # or "corridor" if registered above
-                .environment(self.env_type,
-                            env_config=self.env_config
-                            )
-                .environment(disable_env_checking=True)
-
-                .framework("torch")
-
-                # disable filters, otherwise we would need to synchronize those
-                # as well to the DQN agent
-                
-                .rollouts(observation_filter="MeanStdFilter")
-                .training(
-                    model={"vf_share_layers": True},
-                    vf_loss_coeff=0.01,
-                    num_sgd_iter=6,
-                    _enable_learner_api=False)
-                
-                # Use GPUs iff `RLLIB_NUM_GPUS` env var set to > 0.
-                .resources(num_gpus=0)
-                #.rollouts(num_rollout_workers=1)
-                .rl_module(_enable_rl_module_api=False)
-                
-            )
-            
-            #Creation of observation and action space 
-            obs_supervisor = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_sup,))
-            obs_operator = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_op,))
-
-            action_supervisor  = spaces.MultiDiscrete([4, nbr_of_subzones-1])
-            action_operator  = spaces.Discrete(4)
-
-
-            policies = {
-                "supervisor_policy": (None,obs_supervisor,action_supervisor, {}),
-                "operator_policy": (None,obs_operator,action_operator, {}),
-                
-            }
-
-            def policy_mapping_fn(agent_id, episode, worker, **kwargs):
-                #print("#################",agent_id,"#####################################")
-                agent_type = agent_id.split('_')[0]
-                if agent_type == "supervisor" :
-                    #print(agent_id,"supervisor_policy")
-                    return "supervisor_policy"
-
-                else :
-                    #print(agent_id,"operator_policy")
-                    return "operator_policy"
-    
-            ppo_config.multi_agent(policies=policies,policy_mapping_fn=policy_mapping_fn, )
-            ppo = ppo_config.build()
-
-            i=0 
-            j=0
-            checkpoint_interval =  train_config["checkpoint_interval"]
-            end_interation = train_config["Iteration stop"]
-            while i <= end_interation :
-                i+=1
-                j+=1
-                result_ppo = ppo.train()
-                print("== Iteration", i, "==")
-                
-                if j == checkpoint_interval :
-                    j=0
-                    save_result = ppo.save()  
-                    print(pretty_print(result_ppo))
-                    
-                    path_to_checkpoint = save_result
-                    print(
-                        "An Algorithm checkpoint has been created inside directory: "
-                        f"'{path_to_checkpoint}'."
-                    )    
  
-
-    def ppo_train_from_checkpoint(self):
-
-
-            #================LOAD================
-
-            # Use the Algorithm's `from_checkpoint` utility to get a new algo instance
-            # that has the exact same state as the old one, from which the checkpoint was
-            # created in the first place:
-            my_new_ppo =  Algorithm.from_checkpoint(str(self.last_ppo_checkpoint))
-            i=0 
-            j=0
-            fin = 20
-            save_intervalle = 5
-
-            my_new_result_ppo = my_new_ppo
-            while i  <= fin :
-
-                i+=1
-                j+=1
-               
-                my_new_result_ppo.train()
-                
-                if j == save_intervalle :
-                    j=0 
-
-                    save_result = my_new_ppo.save()
-                    print(pretty_print(my_new_result_ppo))
-                    self.last_ppo_checkpoint = save_result
-                    
-            my_new_result_ppo.stop
-
-    def test(self) :
-      
-            def inference_policy_mapping_fn(agent_id):
-                agent_type = agent_id.split('_')[0]
-                if agent_type == "supervisor" :
-
-                    return "supervisor_policy"
-
-                else :
-
-                    return "operator_policy"
-          
-
-           
-            
-            algo = Algorithm.from_checkpoint("/tmp/tmp7mm65dei")
-            env = self.env_type(env_config = self.env_config)
-            obs = env.reset()
-            print(obs)
-
-            num_episodes = 0
-            num_episodes_during_inference =100
-
-        
-            episode_reward = {}
-
-            while num_episodes < num_episodes_during_inference:
-                num_episodes +=1 
-                action = {}
-                print("next step : ",num_episodes)
-
-                
-                for agent_id, agent_obs in obs.items():
-                    
-                    policy_id = inference_policy_mapping_fn(agent_id)
-                    action[agent_id] = algo.compute_single_action(observation=agent_obs, policy_id=policy_id)
-
-                print(action)
-                obs, reward, done, info = env.step(action)
-                print("next step : ",num_episodes)
-
-                for id, thing in obs.items() :
-                    print("id",id,":",thing) 
-
-                for id, thing in reward.items() :
-                    print("id :",id,":",thing)
-        
-         
-         
-
-               
-
-                env.render()
-
 if __name__ == '__main__':
 
 # #FOR MULTI AGENT CHECKPOINT ARE SAVE IN /tmp/tmpxxxxxxxx I work to solve this problem
@@ -480,8 +335,13 @@ if __name__ == '__main__':
                 }
     
     my_train = DrlExperimentsTune(env=MultiAgentsSupervisorOperatorsEnv,env_config=env_config)
-    # #my_train.tune_train_multi_agent(train_config=train_config)
-    # my_train.tune_train_from_checkpoint(train_config=train_config,multi_agent=True, checkpointpath="Scenarios/Multi_Agents_Supervisor_Operators/models/6x3_3_100/PPO_MultiAgentsSupervisorOperatorsEnv_4ffee_00000_0_2024-03-28_10-12-33/checkpoint_000000")
+    #my_train.tune_train_multi_agent(train_config=train_config)
+    #my_train.tune_train_from_checkpoint(train_config=train_config,multi_agent=True, checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/Multi_Agents_Supervisor_Operators/models/6x3_3_100/PPO_MultiAgentsSupervisorOperatorsEnv_d607d_00000_0_2024-03-28_10-30-37/checkpoint_000000")
+    #my_train.test(implementation="simple",multi_agent=True,checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/Multi_Agents_Supervisor_Operators/models/6x3_3_100/PPO_MultiAgentsSupervisorOperatorsEnv_d607d_00000_0_2024-03-28_10-30-37/checkpoint_000000")
+    my_train.export_to_onnx(policies = ["supervisor_policy","operator_policy"],
+                            checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/Multi_Agents_Supervisor_Operators/models/6x3_3_100/PPO_MultiAgentsSupervisorOperatorsEnv_d607d_00000_0_2024-03-28_10-30-37/checkpoint_000000",
+                            export_dir="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/Multi_Agents_Supervisor_Operators/models/")
+
 # #-----------------------------------------------------------------------------------------------------
 # # Train mono agent 
     # from Scenarios.UUV_Mono_Agent_TSP.env import UUVMonoAgentTSPEnv
