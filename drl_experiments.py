@@ -16,72 +16,135 @@ import subprocess
 import time
 import onnxruntime
 import numpy as np
-
+import os, sys 
 from Scenarios.Multi_Agents_Supervisor_Operators.env import MultiAgentsSupervisorOperatorsEnv 
 
 class DrlExperimentsTune():
 
     def __init__(self, env, env_config) :
-
+       
         self.env_config = env_config
         self.env_type= env
+
         
     def tune_train(self, train_config) : 
+
+        config = (PPOConfig() 
+            
+                .environment(self.env_type,env_config=self.env_config,
+                                disable_env_checking=True)
+
+                .resources(num_learner_workers=train_config["num_learner_workers"],
+                            num_cpus_per_worker=train_config["num_cpus_per_worker"]
+                            )
+                )
 
 
 
         # Lancez TensorBoard en utilisant subprocess
            
         # Lancez TensorBoard en utilisant un nouveau terminal (Linux/Mac)
-        tensorboard_command = f"x-terminal-emulator -e tensorboard --logdir="+str(train_config["path"])
+        #tensorboard_command = f"x-terminal-emulator -e tensorboard --logdir="+str(self.ray_path)
         
-        process_terminal_1 = subprocess.Popen(tensorboard_command, shell=True)
-        time.sleep(2)
+        #process_terminal_1 = subprocess.Popen(tensorboard_command, shell=True)
+        #time.sleep(2)
         self.env_config['implementation'] = "simple"
-        
-        tune_config={
-                                    "env": self.env_type,
-                                    "env_config":self.env_config,
-                                    "num_workers": train_config["num_workers"],
-                                    #"num_learner_workers" : train_config["num_learner_workers"],
-                                    "num_gpus": train_config["num_gpus"],
-                                    #"num_gpus_per_worker": train_config["num_gpus_per_worker"],
-                                    "num_cpus_per_worker": train_config["num_cpus_per_worker"],
-                                    "model":train_config["model"],
-                                    "optimizer": train_config["optimizer"],
-                                }
-        
+    
         ray.init()
-        algo = tune.run("PPO",name=train_config["name"],config = tune_config,stop = {"timesteps_total": train_config["stop_step"]}, 
-                        checkpoint_config = CheckpointConfig(checkpoint_at_end=True,checkpoint_frequency=train_config["checkpoint_freqency"] ),
-                        storage_path=train_config["path"]
+        algo = tune.run("PPO",
+                        name = str(self.env_config["num_boxes_grid_width"])+"x"+str(self.env_config["num_boxes_grid_height"])+"_"+str(self.env_config["n_orders"])+"_"+str(self.env_config["step_limit"]),
+                        config = config,
+                        stop = {"timesteps_total": train_config["stop_step"]}, 
+                        checkpoint_config = CheckpointConfig(checkpoint_at_end=True,
+                        checkpoint_frequency=train_config["checkpoint_freqency"] ),
+                        storage_path=train_config["storage_path"]
                         )
-                                                                               
-    def tune_train_from_checkpoint(self, train_config, path):
-         
+    
+    def tune_train_multi_agent(self, train_config) : 
+            
+        def policy_mapping_fn(agent_id, episode, worker, **kwargs):
+                agent_type = agent_id.split('_')[0]
+            
+                if agent_type == "supervisor" :
+                
+                    return "supervisor_policy"
+                else :
+                
+                    return "operator_policy" 
 
 
-        
+        config2 = (PPOConfig() 
+                
+                    .environment(MultiAgentsSupervisorOperatorsEnv,env_config=self.env_config,
+                                 disable_env_checking=True)
+
+                    .resources(num_learner_workers=train_config["num_learner_workers"],
+                               num_cpus_per_worker=train_config["num_cpus_per_worker"]
+                               )
+
+                    .multi_agent(policies=env_config["policies"],
+                                 policy_mapping_fn=policy_mapping_fn,)
+                    )
+
+
+        algo = tune.run("PPO", name =  str(self.env_config["num_boxes_grid_width"])+"x"+str(self.env_config["num_boxes_grid_height"])+"_"+str(self.env_config["n_orders"])+"_"+str(self.env_config["step_limit"]),
+                        config = config2,
+                        stop = {"timesteps_total": train_config["stop_step"]}, 
+                        checkpoint_config = CheckpointConfig(checkpoint_at_end=True,
+                                                             checkpoint_frequency=train_config["checkpoint_freqency"] ),
+                        storage_path = train_config["storage_path"])
+                                                                      
+    def tune_train_from_checkpoint(self, train_config, multi_agent = False, checkpointpath = None):
 
         self.env_config['implementation'] = "simple"
         ray.init()
 
-        tune_config={
-                                    "env": self.env_type,
-                                    "env_config":self.env_config,
-                                    "num_workers": train_config["num_workers"],
-                                    #"num_learner_workers" : train_config["num_learner_workers"],
-                                    "num_gpus": train_config["num_gpus"],
-                                    #"num_gpus_per_worker": train_config["num_gpus_per_worker"],
-                                    "num_cpus_per_worker": train_config["num_cpus_per_worker"],
-                                    "model":train_config["model"],
-                                    "optimizer": train_config["optimizer"],
-                                }
-        
-        
-        algo = tune.run("PPO",name=train_config["name"],config = tune_config,stop = {"timesteps_total": train_config["stop_step"]}, 
+        if multi_agent == False : 
+            config = (PPOConfig() 
+                
+                    .environment(self.env_type,env_config=self.env_config,
+                                    disable_env_checking=True)
+
+                    .resources(num_learner_workers=train_config["num_learner_workers"],
+                                num_cpus_per_worker=train_config["num_cpus_per_worker"]
+                                )
+                    )
+            
+        elif multi_agent == True :
+
+            def policy_mapping_fn(agent_id, episode, worker, **kwargs):
+                agent_type = agent_id.split('_')[0]
+            
+                if agent_type == "supervisor" :
+                
+                    return "supervisor_policy"
+                else :
+                
+                    return "operator_policy" 
+            
+   
+           
+            config = (PPOConfig() 
+                    
+                        .environment(MultiAgentsSupervisorOperatorsEnv,env_config=self.env_config,
+                                    disable_env_checking=True)
+
+                        .resources(num_learner_workers=train_config["num_learner_workers"],
+                                num_cpus_per_worker=train_config["num_cpus_per_worker"]
+                                )
+
+                        .multi_agent(policies=env_config["policies"],
+                                    policy_mapping_fn=policy_mapping_fn,)
+                        )
+
+
+
+        algo = tune.run("PPO",
+                        name = "from_checkpoint" + str(self.env_config["num_boxes_grid_width"])+"x"+str(self.env_config["num_boxes_grid_height"])+"_"+str(self.env_config["n_orders"])+"_"+str(self.env_config["step_limit"]),
+                        config = config,
+                        stop = {"timesteps_total": train_config["stop_step"]}, 
                         checkpoint_config = CheckpointConfig(checkpoint_at_end=True,checkpoint_frequency=train_config["checkpoint_freqency"] ),
-                        storage_path=train_config["path"],restore=path
+                        storage_path=train_config["storage_path"],restore=checkpointpath
                         )
            
     def test(self, implementation, path) :
@@ -117,7 +180,7 @@ class DrlExperimentsTune():
                     print("obs",agent_obs)
                     env.render()
  
-    def export(self,checkpointpath, export_dir) : 
+    def export_to_onnx(self,checkpointpath, export_dir) : 
 
         loaded_algo = Algorithm.from_checkpoint(checkpointpath)
         loaded_algo.export_policy_model(export_dir=export_dir,onnx=13)
@@ -367,82 +430,85 @@ class DrlExperimentsPPO():
 
 if __name__ == '__main__':
 
-#FOR MULTI AGENT CHECKPOINT ARE SAVE IN /tmp/tmpxxxxxxxx I work to solve this problem
+# #FOR MULTI AGENT CHECKPOINT ARE SAVE IN /tmp/tmpxxxxxxxx I work to solve this problem
      
-# #Train Multi agent    
-#     taille_map_x = 6
-#     taille_map_y = 3
-#     subzones_size = 3
-#     nbr_sup = 1
-#     nbr_op= 1 
-#     nbr_goals = 3 
-#     env_config={ 
-#                 "implementation" : "simple",
-#                 "num_boxes_grid_width":taille_map_x,
-#                 "num_boxes_grid_height":taille_map_y,
-#                 "subzones_width":subzones_size,
-#                 "num_supervisors" : nbr_sup,
-#                 "num_operators" : nbr_op,
-#                 "n_goals": nbr_goals,
-#                 "num_directions" : 4,
-#                 "step_limit": 100,
-#                 "same_seed" : False
-#                 }
-    
-#     train_config = {
-#                 "checkpoint_interval" : 2,
-#                 "Iteration stop": 3,
-#                 "taille_map_x" : 6,
-#                 "taille_map_y" : 3,
-#                 "subzones_size" : 3,
-#                 "nbr_sup" : 1,
-#                 "nbr_op" : 1
-#                 }
-#     my_train = DrlExperimentsPPO(env=MultiAgentsSupervisorOperatorsEnv,env_config=env_config).ppo_train(train_config= train_config)
+# Train Multi agent    
+        
 
-##-----------------------------------------------------------------------------------------------------
-#Train mono agent 
-    from Scenarios.UUV_Mono_Agent_TSP.env import UUVMonoAgentTSPEnv
-
-
-    taille_map_x = 3
-    taille_map_y = 3
-    n_orders = 3
-    step_limit = 100
-
-
-    env_config={
-                "implementation":"simple",
-                
-                "num_boxes_grid_width":taille_map_x,
-                "num_boxes_grid_height":taille_map_y,
-                "n_orders" : n_orders,
-                "step_limit": step_limit,
+    env_config={ 
+                "implementation" : "simple",
+                "num_boxes_grid_width":6,
+                "num_boxes_grid_height":3,
+                "subzones_width":3,
+                "num_supervisors" : 1,
+                "num_operators" : 1,
+                "n_orders" : 3,
+                "step_limit": 100,
                 "same_seed" : False
                 }
+    
+    taille_map_x = env_config["num_boxes_grid_width"]
+    taille_map_y = env_config["num_boxes_grid_height"]
+    subzones_size = env_config["subzones_width"]
+    nbr_op= env_config["num_operators"]
+        
 
+    nbr_of_subzones = taille_map_x/subzones_size + taille_map_y / subzones_size
+    tail_obs_sup = 2 + nbr_op + nbr_op * 2
+    tail_obs_op = subzones_size * subzones_size *2 + 2        
+
+
+
+    obs_supervisor = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_sup,))
+    obs_operator = spaces.Box(low=0, high=taille_map_x, shape=(tail_obs_op,))
+
+    action_supervisor  = spaces.MultiDiscrete([4, nbr_of_subzones-1])
+    action_operator  = spaces.Discrete(4)
+
+    env_config["policies"] = {
+                        "supervisor_policy": (None,obs_supervisor,action_supervisor,{}),
+                        "operator_policy": (None,obs_operator,action_operator,{}),
+            }
+    
     train_config = {
-                    "name" : str(taille_map_x)+"x"+str(taille_map_y)+"_"+str(n_orders)+"_"+str(step_limit),
-                    "path" : "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models",
-                    "checkpoint_freqency" : 5,
-                    "stop_step" : 1000000000000000000000000000000000000000,
-                    "num_workers": 1,
-                    "num_learner_workers" : 0,
-                    "num_gpus": 0,
-                    "num_gpus_per_worker": 0,
-                    "num_cpus_per_worker": 5,
-                    "model": {"fcnet_hiddens": [128, 128, 128]},  # Architecture du réseau de neurones (couches cachées) 
-                    "optimizer": {"learning_rate": 0.001,} # Taux d'apprentissage
-    }
+                
+                "checkpoint_freqency" : 5,
+                "stop_step" : 10000,
+                "num_learner_workers" :2,
+                "num_cpus_per_worker": 2,
+                "storage_path" : "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/Multi_Agents_Supervisor_Operators/models"
+                }
+    
+    my_train = DrlExperimentsTune(env=MultiAgentsSupervisorOperatorsEnv,env_config=env_config)
+    # #my_train.tune_train_multi_agent(train_config=train_config)
+    # my_train.tune_train_from_checkpoint(train_config=train_config,multi_agent=True, checkpointpath="Scenarios/Multi_Agents_Supervisor_Operators/models/6x3_3_100/PPO_MultiAgentsSupervisorOperatorsEnv_4ffee_00000_0_2024-03-28_10-12-33/checkpoint_000000")
+# #-----------------------------------------------------------------------------------------------------
+# # Train mono agent 
+    # from Scenarios.UUV_Mono_Agent_TSP.env import UUVMonoAgentTSPEnv
 
-    my_platform = DrlExperimentsTune(env_config=env_config,env = UUVMonoAgentTSPEnv)
-    #my_platform.tune_train(train_config=train_config) 
-    my_platform.export(checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_ad9f3_00000_0_2024-03-26_10-10-23/checkpoint_000010",  export_dir="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/")
-    #my_platform.tune_train_from_checkpoint(train_config=train_config,path="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_4d474_00000_0_2024-03-26_13-42-27/checkpoint_000000")
 
-    #my_platform.import_and_test_onnx_model(model_path ="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/model.onnx")
-    #my_platform.export_checkpoint(checkpoint_path = "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002", export_dir = "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/")
-    #my_platform.test(implementation="simple",path="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002")
 
-    #loaded_algo = Algorithm.from_checkpoint("/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/PPO_UUVMonoAgentTSPEnv_b166e_00000_0_2024-03-26_13-45-15/checkpoint_000002")
-    #loaded_algo.export_policy_model(export_dir="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/4x4_3_100/",onnx=13)
+
+    # env_config={
+    #             "implementation":"simple",
+    #             "num_boxes_grid_width":3,
+    #             "num_boxes_grid_height":3,
+    #             "subzones_width" : 3,
+    #             "n_orders" : 3,
+    #             "step_limit": 100,
+    #             "same_seed" : False
+    #             }
+
+    # train_config = {
+                   
+    #                 "storage_path" : "/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models",
+    #                 "checkpoint_freqency" : 5,
+    #                 "stop_step" : 1000000000000000000000000000000000000000,
+    #                 "num_learner_workers" : 2,
+    #                 "num_cpus_per_worker": 2,
+                   
+    # }
+
+    # my_platform = DrlExperimentsTune(env_config=env_config,env = UUVMonoAgentTSPEnv)
+    # my_platform.tune_train(train_config=train_config) 
+    # #my_platform.tune_train_from_checkpoint(train_config=train_config,checkpointpath="/home/ia/Desktop/DRL_platform/DRL_platform_montpellier/Scenarios/UUV_Mono_Agent_TSP/models/3x3_3_100/PPO_UUVMonoAgentTSPEnv_0a24c_00000_0_2024-03-28_10-17-46/checkpoint_000001")

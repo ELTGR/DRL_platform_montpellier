@@ -21,7 +21,10 @@ class MultiAgentsSupervisorOperatorsEnv(MultiAgentEnv):
 
     def __init__(self, env_config):
         self.utils = UtimsMultiAgentsSupervisorOperatorsEnv()
+        
 
+        #modif checkpoint creation add self.n_orders
+        
         # Paramètres de l'environnement
         
 
@@ -34,7 +37,7 @@ class MultiAgentsSupervisorOperatorsEnv(MultiAgentEnv):
         self.same_seed = env_config["same_seed"]
         self.num_targets = 1
         self.subzones_checked = []
-
+        self.n_orders = env_config["n_orders"]
         self.n_sup = env_config["num_supervisors"]  # Nombre de superviseurs
         self.n_op = env_config["num_operators"]     # Nombre d'operateurs
 
