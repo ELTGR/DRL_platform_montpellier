@@ -12,8 +12,8 @@ class UUVMonoAgentTSPEnv2dView:
             self.i = 0
             
     def create_inference_agent(self):
-        i=0
-        agent = UUV(self.implementation,i) 
+        
+        agent = UUV(self.implementation) 
         
         return agent
    

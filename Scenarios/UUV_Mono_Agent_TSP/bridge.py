@@ -2,6 +2,8 @@
 import numpy as np
 import math
 import random
+import socket
+import json
 
 
 class MobileCommonInterface:
@@ -41,6 +43,39 @@ class UUVSimpleImplementation(MobileCommonInterface):
     def get_info(self) :  
         return "Je suis une implémentation simple"
     
+class UnitySimImplementation(MobileCommonInterface):
+    def __init__(self) :
+        self.x = 0
+        self.y = 0
+        self.port = 20000 + 2
+        self.ip_adress = 'localhost'
+
+    def get_pos(self):
+        #self.x,self,y = robot.get_position()
+        return self.x,self.y
+    
+
+    
+    def set_pos(self, new_pose):
+    
+        self.x = new_pose[0]
+        self.y = new_pose[1]
+
+        data = {"x": self.x , "y": 0, "z": self.y, "pitch": 0, "yaw": 0, "roll": 0}
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            server_address = (self.ip_adress, self.port)
+            client_socket.connect(server_address)
+            json_data = json.dumps(data)
+            client_socket.sendall(json_data.encode())
+        
+
+    def get_info(self) :  
+        return "I'm an instance of UnitySim Implementation"
+
+
+
+
 # class Bluerov2RealImplementation(MobileCommonInterface):
     
 #     """
@@ -83,12 +118,15 @@ class UUVSimpleImplementation(MobileCommonInterface):
 
 class UUV:
 
-    def __init__(self, implementation="simple",ip_port=0):
+    def __init__(self, implementation="simple"):
         """
             implementation : choose if you use Bluerov2 or not ("bluerov2" or "simple")
         """
         if implementation == "simple":
             self.implementation = UUVSimpleImplementation()
+        elif implementation == "unity":
+            print("in uxv real")
+            self.implementation = UnitySimImplementation()
         elif implementation == "real":
             print("in uxv real")
             self.implementation = UUVSimpleImplementation()
